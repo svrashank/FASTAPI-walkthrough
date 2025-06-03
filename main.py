@@ -64,11 +64,27 @@ fake_db = [
 # You can set path and query parameters in a single function FASTAPI can differentiate between them, emp_name is a path param set to None by default
 # Just Don't set the default value if you want to make a query parameter mandatory
 from typing import List
-@app.get("/founders/{emp_name}")
-async def get_founders(emp_name: str | None = None, position : List[str] = Query(default=["Founder and CEO", "Chief Technology Officer"], location: str | None  = None)):
+# @app.get("/founders/{emp_name}")
+# async def get_founders(emp_name: str | None = None, position : List[str] = Query(default=["Founder and CEO", "Chief Technology Officer"], location: str | None  = None)):
+#     founders = []
+#     for emp in fake_db:
+#         if emp.get("position") in position:
+#             founders.append(emp)
+#     return founders
+
+# Setting multiple query paramaters in a Model
+from typing import Annotated, Literal
+
+from fastapi import FastAPI, Query
+from pydantic import BaseModel, Field
+
+class DefaultFilters(BaseModel):
+    position : List[str] = Query (default = ["Founder and CEO", "Chief Technology Officer"])
+
+@app.get("/mode_default_founders")
+async def get_model_founders( position : Annotated[DefaultFilters,Query()]):
     founders = []
     for emp in fake_db:
         if emp.get("position") in position:
             founders.append(emp)
     return founders
-
