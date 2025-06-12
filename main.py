@@ -75,7 +75,7 @@ from typing import List
 # Setting multiple query paramaters in a Model
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Body
 from pydantic import BaseModel, Field
 
 class DefaultFilters(BaseModel):
@@ -88,3 +88,69 @@ async def get_model_founders( position : Annotated[DefaultFilters,Query()]):
         if emp.get("position") in position:
             founders.append(emp)
     return founders
+
+
+# The json payload that you will send in the post request can also be declared using Pydantic
+class Employee(BaseModel):
+    emp_name :str | None = None 
+    age : int = Body(25)
+
+
+### Body Parameters 
+@app.post("/employees/")
+async def post_employee_info(emp: Employee):
+    return {"Employee":emp}
+
+
+## You can Declare validation for each field of the json 
+from pydantic import Field 
+class Employee(BaseModel):
+    emp_name :str | None = Field(max_length = 200)
+    age : int = Body(25)
+
+
+### Body Parameters 
+@app.post("/employees_validated/")
+async def post_employee_info(emp: Employee):
+    return {"Employee":emp}
+
+
+# you can nest your modules 
+from pydantic import HttpUrl
+class Job(BaseModel):
+    designation : str | None = None 
+    employee : Employee | None = None 
+    linkedin : HttpUrl
+
+
+@app.post("/job/")
+async def get_job(job: Job):
+    job = {
+        "designation": "Full Stack Developer",
+        "employee" : {
+            "emp_name" : "Vrashank Shetty",
+            "age" : 29
+        },
+        "linkedin": "https://in.linkedin.com/"
+    }
+    return {"job":job}
+
+# You can declare a Body, Query or path parameter with an example
+from pydantic import HttpUrl
+class Job(BaseModel):
+    designation : str | None = None 
+    employee : Employee | None = None 
+    linkedin : HttpUrl
+
+from fastapi import Body
+@app.post("/job/")
+async def get_job(job: Annotated [Job, Body ( examples = [{"designation": "Enter Designation Here","employee" : {"emp_name" : "Employee Name","age" : 29},"linkedin": "https://in.linkedin.com/"}])]):
+    job = {
+            "designation": "Full Stack Developer",
+            "employee" : {
+                "emp_name" : "Vrashank Shetty",
+                "age" : 29
+            },
+            "linkedin": "https://in.linkedin.com/"
+        }
+    return {"job":job}
