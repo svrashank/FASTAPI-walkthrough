@@ -154,3 +154,63 @@ async def get_job(job: Annotated [Job, Body ( examples = [{"designation": "Enter
             "linkedin": "https://in.linkedin.com/"
         }
     return {"job":job}
+
+
+
+from fastapi import Header, Cookie
+
+@app.get("/item_name/")
+async def get_item_name(headers: Annotated [str | None, Header(convert_underscore = True) ] = None):
+    return headers
+
+# You can extra duplicate values of a header using list[str]
+# FASTAPI will take care of converting _ to - or vice versa
+# from fastapi import Header, Cookie
+
+# @app.get("/item_name/")
+# async def get_item_name(x_token: Annotated [list[str] | None, Header(convert_underscore = True) ] = None):
+#     return headers
+
+# You can pass a header format 
+
+class DefaultHeaders(BaseModel):
+    client_id : str | None = None
+    client_secret :str | None = Field(max_length = 20)
+    keep_alive : bool | None = Field(default = True)
+
+@app.post("/item_name_with_headers/")
+async def get_item_name_with_headers(headers : Annotated[DefaultHeaders, Header()]):
+    return headers
+
+
+
+# Models and their example 
+from pydantic import EmailStr
+
+class UserIn(BaseModel):
+    fullname :str | None = None 
+    email :EmailStr 
+    password: Annotated[str, Field(mandatory= True)]
+
+
+class UserOut(BaseModel):
+    fullname : str | None = None 
+    email : EmailStr
+
+class UserInDB(BaseModel):
+    fullname : str | None = None
+    hased_password : str 
+    email : EmailStr
+
+
+def hash_password(password:str) -> str:
+    return "hash" + password
+
+def fake_save_user(user_in: UserIn):
+    hashed_password = fake_password_hasher(user_in.password)
+    user_in_db = UserInDB(**user_in.dict(), hashed_password=hashed_password)
+
+@app.post("/user/",response_model = UserOut)
+async def create_user(user_info: UserIn) :
+    fake_save_user(user_in)
+    
