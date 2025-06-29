@@ -199,7 +199,7 @@ class UserOut(BaseModel):
 
 class UserInDB(BaseModel):
     fullname : str | None = None
-    hased_password : str 
+    hashed_password : str 
     email : EmailStr
 
 
@@ -213,4 +213,152 @@ def fake_save_user(user_in: UserIn):
 @app.post("/user/",response_model = UserOut)
 async def create_user(user_info: UserIn) :
     fake_save_user(user_in)
+
+
+# Security 
+# from typing import Annotated
+
+# from fastapi import Depends, FastAPI
+# from fastapi.security import OAuth2PasswordBearer
+
+# app = FastAPI()
+
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+# @app.get("/items/")
+# async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
+#     return {"token": token}
     
+
+# # Following is how you would return a user from the DB
+# from typing import Annotated
+
+# from fastapi import Depends, FastAPI, HTTPException, status
+# from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+# from pydantic import BaseModel
+
+# fake_users_db = {
+#     "johndoe": {
+#         "username": "johndoe",
+#         "full_name": "John Doe",
+#         "email": "johndoe@example.com",
+#         "hashed_password": "fakehashedsecret",
+#         "disabled": False,
+#     },
+#     "alice": {
+#         "username": "alice",
+#         "full_name": "Alice Wonderson",
+#         "email": "alice@example.com",
+#         "hashed_password": "fakehashedsecret2",
+#         "disabled": True,
+#     },
+# }
+
+# class User(BaseModel):
+#     username : str | None = None
+#     full_name : str | None = None
+#     email : str | None = None 
+#     disabled : bool | None = None
+
+# class UserInDB(User):
+#     hashed_password : str | None = None 
+
+# def hash_password(password: str):  # Renamed
+#     return "fakehashed" + password
+
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl = "token")
+
+# def get_user(db, username :str):
+#     if username in db :
+#         # get the user in the dict
+#         user_dict = db.get(username)
+#         # Following is as good as passing arguments as key = value from the dict
+#         return UserInDB(**user_dict)
+# def get_user_from_token(token: str):
+#     user = get_user(fake_users_db, token)
+#     return user
+
+# async def get_current_user(token : Annotated[str, Depends(oauth2_scheme)]):
+#     user  = get_user_from_token(token)
+#     if not user:
+#         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Invalid authentication credentials",
+#             headers={"WWW-Authenticate": "Bearer"})
+#     return user
+
+# async def get_active_user(user : Annotated[User, Depends(get_current_user)]):
+#     if user.disabled:
+#         raise HTTPException(status_code=400, detail="Inactive user") 
+#     return user 
+
+# @app.post("/token")
+# async def login(form_data : Annotated[OAuth2PasswordRequestForm, Depends()]):
+#     username = form_data.username
+#     user_in_db = get_user(fake_users_db,username)
+#     if not user_in_db:
+#         raise HTTPException(status_code = status.HTTP_404_NOT_FOUND,detail = f"User {username} not found")
+#     hashed_password = user_in_db.hashed_password
+#     hashed_form_password = hash_password(form_data.password)
+#     if hashed_password != hashed_form_password:
+#         raise HTTPException(status_code = status.HTTP_401_UNAUTHORIZED,
+#                 detail="Invalid login credentials",headers={"WWW-Authenticate": "Bearer"})
+#     return {"access_token": user_in_db.username, "token_type": "bearer"}
+
+
+# @app.get('/users/me')
+# async def get_current_session_user(current_user : Annotated[User,Depends(get_active_user)]):
+#     return current_user
+
+
+#Security with Jwt 
+
+from datetime import datetime, timedelta, timezone
+from typing import Annotated
+
+import jwt
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jwt.exceptions import InvalidTokenError
+from passlib.context import CryptContext
+from pydantic import BaseModel
+
+SECRET = "27af804ea264e867c81c23a928749fb44993f61e610059459c580431f35523be"
+ALGORALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+fake_users_db = {
+    "johndoe": {
+        "username": "johndoe",
+        "full_name": "John Doe",
+        "email": "johndoe@example.com",
+        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
+        "disabled": False,
+    }
+}
+
+class Token(BaseModel):
+    access_token : str | None = None
+    token_type : str | None = None
+
+class TokenData(BaseModel):
+    username : str | None = None
+
+class User(BaseModel):
+    username : str | None = None
+    full_name : str | None = None
+    email : str | None = None 
+    disabled : bool | None = None
+   
+class UserInDB(User):
+    hashed_password : str | None = None
+
+# Hashing algo
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Getting token url from the request
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+def verify_password(plain_text_form_password,hashed_db_password):
+    return pwd_context.verify(plain_text_form_password,hashed_db_password)
+
