@@ -324,7 +324,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 
 SECRET = "27af804ea264e867c81c23a928749fb44993f61e610059459c580431f35523be"
-ALGORALGORITHM = "HS256"
+ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 fake_users_db = {
@@ -359,6 +359,74 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
-def verify_password(plain_text_form_password,hashed_db_password):
-    return pwd_context.verify(plain_text_form_password,hashed_db_password)
+def verify_password(plain_text_password,hashed_db_password):
+    return pwd_context.verify(plain_text_password,hashed_db_password)
 
+def get_password_hash(password : str) -> str :
+    return pwd_context.hash(password)
+
+def get_user(username : str, fake_db: dict):
+    if username not in fake_db:
+        raise HTTPException(status_code = status.HTTP_404_NOT_FOUND,detail = f"User {username} not found",headers={"WWW-Authenticate": "Bearer"})
+    user = fake_db.get(username)
+    return UserInDB(**user)
+
+def authenticate_user(fake_db, username : str, password :str ):
+    user = get_user(username,fake_db)
+    if not verify_password(password,user.hashed_password):
+        return False
+    return True
+
+def create_access_token(data:dict,expires_delta : timedelta | None = None):
+    to_encode = data.copy()
+    if expires_delta:
+        access_token_expires_in = datetime.now(timezone.utc) + expires_delta
+    else:
+        access_token_expires_in = datetime.now(timezone.utc) + timedelta(minutes = 15)
+    to_encode.update({"exp":access_token_expires_in})
+    encoded_jwt  = jwt.encode(to_encode,SECRET,algorithm = ALGORITHM)
+    return encoded_jwt 
+
+async def get_current_user(token : Annotated[str,Depends(oauth2_scheme)]):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    user = None
+    try:
+        payload = jwt.decode(token,SECRET,algorithm = ALGORITHM)
+        username = payload.get("sub")
+        if not username:
+            raise credentials_exception
+        token_date = TokenData(username)
+        user = get_user(token_date.username,fake_db)
+    except InvalidTokenError:
+        raise credentials_exception
+    if not user:
+        raise credentials_exception
+    return user
+
+def get_current_active_user(current_user: Annotated[User,Depends(get_current_user)]):
+    if current_user.disabled:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user
+
+@app.post("/token")
+async def login_for_access_token(form_data : Annotated[OAuth2PasswordRequestForm, Depends()]) -> Token :
+    user = authenticate_user(fake_db,form_data.username,form_data.password)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"})
+    expires_delta = timedelta(minutes = ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token({"sub":form_data.username},expires_delta)
+    return Token(access_token=access_token,token_type = "Bearer")
+
+@app.get("/users/me",response_model = User)
+async def get_logged_in_user(current_user: Annotated[User,Depends(get_active_user)]):
+    return current_user
+
+
+    
+    
